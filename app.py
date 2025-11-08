@@ -8,6 +8,11 @@ from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
+# 导入模型和路由
+from models import User, EmotionDiary, EmotionAnalysis, GameState, GameProgress
+from routes.auth import auth_bp
+from routes.diary import diary_bp
+
 # 加载环境变量
 load_dotenv()
 
@@ -27,29 +32,10 @@ migrate = Migrate(app, db)
 jwt = JWTManager(app)
 CORS(app)
 
-# 用户模型
-class User(db.Model):
-    __tablename__ = 'users'
+# 注册蓝图
+app.register_blueprint(auth_bp, url_prefix='/api/auth')
+app.register_blueprint(diary_bp, url_prefix='/api/diary')
 
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    email = db.Column(db.String(100), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    is_active = db.Column(db.Boolean, default=True)
-
-    # 密码重置字段
-    reset_token = db.Column(db.String(255), nullable=True)
-    reset_token_expires = db.Column(db.DateTime, nullable=True)
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'username': self.username,
-            'email': self.email,
-            'created_at': self.created_at.isoformat(),
-            'is_active': self.is_active
-        }
 
 # 用户注册API
 @app.route('/api/auth/register', methods=['POST'])
@@ -241,6 +227,40 @@ def health_check():
         'timestamp': datetime.now().isoformat(),
         'version': '1.0.0'
     })
+
+
+# 页面路由
+@app.route('/profile')
+@jwt_required()
+def profile():
+    """个人资料页面"""
+    return render_template('profile.html')
+
+@app.route('/diary')
+@jwt_required()
+def diary_list():
+    """日记列表页面"""
+    return render_template('diary_list.html')
+
+@app.route('/diary/new')
+@app.route('/diary/new')
+@jwt_required()
+def diary_new():
+    """写新日记页面"""
+    return render_template('diary_edit.html')
+
+@app.route('/diary/<int:diary_id>')
+@jwt_required()
+def diary_detail(diary_id):
+    """日记详情页面"""
+    return render_template('diary_detail.html', diary_id=diary_id)
+
+@app.route('/diary/<int:diary_id>/edit')
+@jwt_required()
+def diary_edit(diary_id):
+    """编辑日记页面"""
+    return render_template('diary_edit.html', diary_id=diary_id)
+
 
 def upgrade_database():
     """升级数据库结构"""
