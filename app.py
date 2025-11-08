@@ -23,14 +23,10 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-string')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
-# 数据库配置优化
+# 数据库配置优化 - 简化版本避免云端兼容性问题
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_size': 10,
-    'pool_recycle': 120,
-    'pool_pre_ping': True,
-    'connect_args': {
-        'charset': 'utf8mb4'
-    }
+    'pool_size': 5,
+    'pool_recycle': 3600
 }
 
 # 初始化扩展
