@@ -1,9 +1,7 @@
 # 路由模块初始化
-from flask import Blueprint
-
-# 创建蓝图
-auth_bp = Blueprint('auth', __name__)
-diary_bp = Blueprint('diary', __name__)
-
-# 导入路由处理器
+# 导入路由处理器和蓝图
 from . import auth, diary
+
+# 导出蓝图
+auth_bp = auth.bp
+diary_bp = diary.bp

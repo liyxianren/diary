@@ -1,17 +1,14 @@
 from flask import Flask, render_template, request, jsonify
-from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
-# 导入模型和路由
+# 导入扩展和模型
+from extensions import db, init_extensions
 from models import User, EmotionDiary, EmotionAnalysis, GameState, GameProgress
-from routes.auth import auth_bp
-from routes.diary import diary_bp
+from routes import auth_bp, diary_bp
 
 # 加载环境变量
 load_dotenv()
@@ -27,111 +24,11 @@ app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-string')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
 # 初始化扩展
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
-jwt = JWTManager(app)
-CORS(app)
+init_extensions(app)
 
 # 注册蓝图
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(diary_bp, url_prefix='/api/diary')
-
-
-# 用户注册API
-@app.route('/api/auth/register', methods=['POST'])
-def register():
-    try:
-        data = request.get_json()
-
-        # 验证输入
-        if not data.get('username') or not data.get('email') or not data.get('password'):
-            return jsonify({'error': 'Missing required fields'}), 400
-
-        username = data['username'].strip()
-        email = data['email'].strip().lower()
-        password = data['password']
-
-        # 检查用户名和邮箱是否已存在
-        if User.query.filter_by(username=username).first():
-            return jsonify({'error': 'Username already exists'}), 409
-        if User.query.filter_by(email=email).first():
-            return jsonify({'error': 'Email already exists'}), 409
-
-        # 创建新用户
-        password_hash = generate_password_hash(password)
-        new_user = User(
-            username=username,
-            email=email,
-            password_hash=password_hash
-        )
-
-        db.session.add(new_user)
-        db.session.commit()
-
-        # 创建访问令牌
-        access_token = create_access_token(identity=str(new_user.id))
-
-        return jsonify({
-            'message': '用户注册成功',
-            'access_token': access_token,
-            'user': new_user.to_dict()
-        }), 201
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': f'注册失败: {str(e)}'}), 500
-
-# 用户登录API
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    try:
-        data = request.get_json()
-
-        if not data.get('username') or not data.get('password'):
-            return jsonify({'error': '请输入用户名和密码'}), 400
-
-        username = data['username'].strip()
-        password = data['password']
-
-        # 查找用户（支持用户名或邮箱）
-        user = User.query.filter(
-            (User.username == username) | (User.email == username.lower())
-        ).first()
-        if not user or not check_password_hash(user.password_hash, password):
-            return jsonify({'error': '用户名/邮箱或密码错误'}), 401
-
-        if not user.is_active:
-            return jsonify({'error': '账号已被停用'}), 403
-
-        # 创建访问令牌
-        access_token = create_access_token(identity=str(user.id))
-
-        return jsonify({
-            'message': '登录成功',
-            'access_token': access_token,
-            'user': user.to_dict()
-        }), 200
-
-    except Exception as e:
-        return jsonify({'error': f'登录失败: {str(e)}'}), 500
-
-# 获取用户信息API
-@app.route('/api/auth/profile', methods=['GET'])
-@jwt_required()
-def get_profile():
-    try:
-        user_id = get_jwt_identity()
-        user = User.query.get(int(user_id))
-
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-
-        return jsonify({
-            'user': user.to_dict()
-        }), 200
-
-    except Exception as e:
-        return jsonify({'error': f'获取用户信息失败: {str(e)}'}), 500
 
 # 主页路由
 @app.route('/')
@@ -152,72 +49,6 @@ def register_page():
 @app.route('/reset-password/<token>')
 def reset_password_page(token):
     return render_template('reset_password.html', token=token)
-
-# 忘记密码API - 发送重置链接
-@app.route('/api/auth/forgot-password', methods=['POST'])
-def forgot_password():
-    try:
-        data = request.get_json()
-        email = data.get('email', '').strip().lower()
-
-        if not email:
-            return jsonify({'error': '请输入邮箱地址'}), 400
-
-        # 检查邮箱是否存在
-        user = User.query.filter_by(email=email).first()
-        if not user:
-            return jsonify({'error': '该邮箱未注册'}), 404
-
-        # 生成重置令牌（有效期1小时）
-        reset_token = generate_password_hash(f"{user.id}{datetime.utcnow().isoformat()}")[:50]
-        user.reset_token = reset_token
-        user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
-        db.session.commit()
-
-        # 这里应该发送邮件，暂时返回成功消息
-        return jsonify({
-            'message': '重置链接已发送到您的邮箱',
-            'reset_token': reset_token  # 开发环境返回，生产环境应删除
-        }), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': f'发送失败: {str(e)}'}), 500
-
-# 重置密码API
-@app.route('/api/auth/reset-password', methods=['POST'])
-def reset_password():
-    try:
-        data = request.get_json()
-        reset_token = data.get('reset_token')
-        new_password = data.get('new_password')
-
-        if not reset_token or not new_password:
-            return jsonify({'error': '缺少必要参数'}), 400
-
-        if len(new_password) < 6:
-            return jsonify({'error': '密码长度至少为6个字符'}), 400
-
-        # 查找用户
-        user = User.query.filter_by(reset_token=reset_token).first()
-        if not user:
-            return jsonify({'error': '无效的重置链接'}), 404
-
-        # 检查链接是否过期
-        if not user.reset_token_expires or datetime.utcnow() > user.reset_token_expires:
-            return jsonify({'error': '重置链接已过期'}), 400
-
-        # 更新密码
-        user.password_hash = generate_password_hash(new_password)
-        user.reset_token = None
-        user.reset_token_expires = None
-        db.session.commit()
-
-        return jsonify({'message': '密码重置成功'}), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': f'重置失败: {str(e)}'}), 500
 
 # 健康检查API
 @app.route('/api/health')

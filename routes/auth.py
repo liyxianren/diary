@@ -49,7 +49,7 @@ def register():
         db.session.commit()
 
         # 创建访问令牌
-        access_token = create_access_token(identity=new_user.id)
+        access_token = create_access_token(identity=str(new_user.id))
 
         return jsonify({
             'message': 'User registered successfully',
@@ -88,7 +88,7 @@ def login():
         db.session.commit()
 
         # 创建访问令牌
-        access_token = create_access_token(identity=user.id)
+        access_token = create_access_token(identity=str(user.id))
 
         return jsonify({
             'message': 'Login successful',
