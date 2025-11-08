@@ -511,8 +511,14 @@ function bindGlobalEvents() {
     // 平滑滚动
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
+            const href = this.getAttribute('href');
+            // 跳过空的href
+            if (!href || href === '#') {
+                e.preventDefault();
+                return;
+            }
             e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
+            const target = document.querySelector(href);
             if (target) {
                 target.scrollIntoView({
                     behavior: 'smooth',
@@ -523,12 +529,10 @@ function bindGlobalEvents() {
     });
 }
 
-// 导出类供其他模块使用
-export {
-    AuthManager,
-    APIClient,
-    FormValidator,
-    Validators,
-    ThemeManager,
-    Router
-};
+// 导出类供其他模块使用（移除ES6 export语法，直接赋值到window对象）
+window.AuthManager = AuthManager;
+window.APIClient = APIClient;
+window.FormValidator = FormValidator;
+window.Validators = Validators;
+window.ThemeManager = ThemeManager;
+window.Router = Router;

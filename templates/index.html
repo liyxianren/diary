@@ -6,6 +6,10 @@
     <title>CBT情绪日记游戏 - 用爱与科学疗愈心灵</title>
     <meta name="description" content="基于认知行为疗法的情绪日记游戏，帮助您管理情绪，培养积极思维习惯">
 
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="alternate icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
@@ -56,10 +60,10 @@
                                 <span id="username">用户</span>
                             </button>
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>个人资料</a></li>
-                                <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>设置</a></li>
+                                <li><a class="dropdown-item" href="/profile" style="cursor: pointer;"><i class="fas fa-user me-2"></i>个人资料</a></li>
+                                <li><a class="dropdown-item" href="/settings" style="cursor: pointer;"><i class="fas fa-cog me-2"></i>设置</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="#" id="logoutBtn"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a></li>
+                                <li><a class="dropdown-item" href="javascript:void(0);" id="logoutBtn"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a></li>
                             </ul>
                         </div>
                     </div>
