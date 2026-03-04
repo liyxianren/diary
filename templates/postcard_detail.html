@@ -346,11 +346,14 @@
     </div>
 
     <script>
-        const token = localStorage.getItem('token') || localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+        function getToken() {
+            return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+        }
+
         const postcardId = {{ postcard_id }};
 
         document.addEventListener('DOMContentLoaded', () => {
-            if (!token) {
+            if (!getToken()) {
                 window.location.href = '/login';
                 return;
             }
@@ -360,7 +363,7 @@
         async function loadPostcard() {
             try {
                 const response = await fetch(`/api/postcard/${postcardId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
                 });
 
                 if (response.status === 401) {
@@ -508,7 +511,7 @@
         function startPolling() {
             pollInterval = setInterval(async () => {
                 const res = await fetch(`/api/postcard/${postcardId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
                 });
                 if (res.ok) {
                     const data = await res.json();
@@ -523,7 +526,7 @@
         async function markAsRead() {
             await fetch(`/api/postcard/${postcardId}/read`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${getToken()}` }
             });
         }
     </script>

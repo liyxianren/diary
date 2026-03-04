@@ -471,20 +471,20 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <script>
+        function getToken() {
+            return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
-            // Check Auth directly or let main.js handle it
-            const token = localStorage.getItem('token') || localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
-            if (!token) {
-                // If main.js doesn't redirect automatically (it usually doesn't on all pages), we enforce it here
-                // But main.js usually helps with UI updates. Let's update UI first.
-                // Actually main.js handles UI updates but doesn't auto-redirect unless strictly required or checking protected endpoints.
-                // We will let the loadPostcards function handle 401.
+            if (!getToken()) {
+                window.location.href = '/login';
+                return;
             }
             loadPostcards();
         });
 
         async function loadPostcards() {
-            const token = localStorage.getItem('token') || localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+            const token = getToken();
             if (!token) {
                 window.location.href = '/login';
                 return;
