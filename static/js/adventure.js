@@ -14,8 +14,8 @@ const state = {
     adventureId: null,
     diaryId: null,
     session: null,
-    currentMonsterIndex: 0,   // 当前怪物索引
-    currentQuestionIndex: 0,  // 当前问题索引（一个怪物可能有多个问题）
+    currentMonsterIndex: 0,   // 当前怪物索引（与题目索引同步）
+    currentQuestionIndex: 0,  // 当前问题索引
     selectedOptions: [],
     coinsEarned: 0,
     challengeAnswered: false,
@@ -23,8 +23,8 @@ const state = {
     // 战斗系统状态
     xiaojuHp: 5,
     xiaojuMaxHp: 5,
-    monsterHp: 3,
-    monsterMaxHp: 3,
+    monsterHp: 1,
+    monsterMaxHp: 1,
     monstersDefeated: 0,
     isAnimating: false,
     battleLog: []
@@ -62,6 +62,12 @@ const CHALLENGE_TYPE_NAMES = {
     'evidence': '证据收集',
     'reframe': '思维重构'
 };
+
+function getActiveMonsterIndex() {
+    const monsters = state.session?.monsters || [];
+    if (!monsters.length) return 0;
+    return Math.min(state.currentQuestionIndex, monsters.length - 1);
+}
 
 /**
  * 初始化探险
@@ -199,20 +205,22 @@ function showIntroPanel() {
     const preview = document.getElementById('monsterPreview');
     preview.innerHTML = '';
 
-    // 只显示第1个怪物（游戏逻辑是1个怪物3滴血）
+    // 预览所有怪物
     if (session.monsters && session.monsters.length > 0) {
-        const monster = session.monsters[0];
-        const div = document.createElement('div');
-        div.className = 'monster-preview-item';
-        div.innerHTML = `
-            <div class="monster-preview-icon">${MONSTER_ICONS[monster.type] || '👻'}</div>
-            <div class="monster-preview-name">${monster.name_zh}</div>
-        `;
-        preview.appendChild(div);
+        session.monsters.forEach((monster) => {
+            const div = document.createElement('div');
+            div.className = 'monster-preview-item';
+            div.innerHTML = `
+                <div class="monster-preview-icon">${MONSTER_ICONS[monster.type] || '👻'}</div>
+                <div class="monster-preview-name">${monster.name_zh}</div>
+            `;
+            preview.appendChild(div);
+        });
     }
 
+    const totalMonsters = (session.monsters || []).length;
     document.getElementById('introText').textContent =
-        `小橘在迷雾森林中发现了一只迷雾怪物！准备好用CBT智慧击败它吧！`;
+        `小橘在迷雾森林中发现了 ${totalMonsters} 只迷雾怪物。完成全部挑战，逐个击败它们吧！`;
 }
 
 /**
@@ -300,30 +308,28 @@ function updateMonsterHpDisplay() {
 function showBattle() {
     const challenges = state.session.challenges || [];
     const monsters = state.session.monsters || [];
-
-    // 计算当前挑战索引
     const challenge = challenges[state.currentQuestionIndex];
-    const monster = monsters[state.currentMonsterIndex] || monsters[0];
 
     if (!challenge) {
         completeAdventure();
         return;
     }
 
-    // 计算怪物血量：1个怪物3滴血，需要答对3题击败
-    state.monsterMaxHp = 3;
-    state.monsterHp = state.monsterMaxHp - state.currentQuestionIndex;
-    if (state.monsterHp <= 0) {
-        state.monsterHp = state.monsterMaxHp; // 安全检查
-    }
+    // 一个挑战对应一个怪物
+    state.currentMonsterIndex = getActiveMonsterIndex();
+    const monster = monsters[state.currentMonsterIndex] || monsters[0] || {};
+
+    // 每题一怪：怪物1血，答对即击败
+    state.monsterMaxHp = 1;
+    state.monsterHp = challenge.completed && challenge.is_correct ? 0 : 1;
 
     // 重置状态
     state.selectedOptions = [];
     state.challengeAnswered = false;
 
-    // 更新进度 - 显示当前题目/总题数
+    // 更新进度
     document.getElementById('challengeProgress').textContent =
-        `题目 ${state.currentQuestionIndex + 1}/${challenges.length}`;
+        `挑战 ${state.currentQuestionIndex + 1}/${challenges.length}`;
     document.getElementById('coinsEarned').textContent = state.coinsEarned;
 
     // 更新怪物信息
@@ -331,8 +337,10 @@ function showBattle() {
 
     // 更新怪物图片
     const monsterSprite = document.getElementById('monsterSprite');
-    if (MONSTER_SPRITES[monster.type]) {
+    if (monster.type && MONSTER_SPRITES[monster.type]) {
         monsterSprite.style.backgroundImage = `url('${MONSTER_SPRITES[monster.type]}')`;
+    } else {
+        monsterSprite.style.backgroundImage = "url('/game/monster_dark_cloud.svg')";
     }
 
     // 更新血量显示
@@ -439,6 +447,7 @@ async function submitAnswer() {
     if (state.challengeAnswered || state.isAnimating) return;
 
     const challenge = state.session.challenges[state.currentQuestionIndex];
+    const currentMonster = (state.session.monsters || [])[getActiveMonsterIndex()] || {};
     const btnSubmit = document.getElementById('btnSubmit');
 
     btnSubmit.disabled = true;
@@ -481,24 +490,16 @@ async function submitAnswer() {
         // 执行战斗动画
         if (result.correct) {
             await playAttackAnimation('xiaoju', 'monster');
-            state.monsterHp--;
+            state.monsterHp = 0;
             updateMonsterHpDisplay();
 
             state.coinsEarned += result.coins_earned || 10;
             document.getElementById('coinsEarned').textContent = state.coinsEarned;
 
-            // 检查怪物是否被击败
-            if (state.monsterHp <= 0) {
-                await playDefeatAnimation('monster');
-                state.monstersDefeated++;
-                state.currentMonsterIndex++;
-
-                showBattleMessage('击败了迷雾怪物！', 'success');
-                document.getElementById('xiaojuSpeech').textContent = '太棒了！击败了一只怪物！';
-            } else {
-                showBattleMessage(`命中！怪物还剩 ${state.monsterHp} 滴血`, 'success');
-                document.getElementById('xiaojuSpeech').textContent = '命中了！继续加油！';
-            }
+            await playDefeatAnimation('monster');
+            state.monstersDefeated++;
+            showBattleMessage(`击败了${currentMonster.name_zh || '迷雾怪物'}！`, 'success');
+            document.getElementById('xiaojuSpeech').textContent = '太棒了！我们继续前进！';
         } else {
             await playAttackAnimation('monster', 'xiaoju');
             state.xiaojuHp--;
@@ -510,6 +511,7 @@ async function submitAnswer() {
             if (state.xiaojuHp <= 0) {
                 await playDefeatAnimation('xiaoju');
                 document.getElementById('xiaojuSpeech').textContent = '呜...我倒下了...';
+                state.isAnimating = false;
                 showGameOver();
                 return;
             } else {
@@ -526,22 +528,23 @@ async function submitAnswer() {
         state.isAnimating = false;
 
         // 更新按钮
-        const isLastChallenge = result.is_last || state.currentQuestionIndex >= state.session.challenges.length - 1;
-        const monsterDefeated = state.monsterHp <= 0;
+        const nextIndex = typeof result.next_challenge === 'number'
+            ? result.next_challenge
+            : state.currentQuestionIndex + 1;
+        const hasNextChallenge = !result.is_last && nextIndex < (state.session.challenges || []).length;
 
         if (state.xiaojuHp <= 0) {
             btnSubmit.textContent = '探险结束';
             btnSubmit.onclick = showGameOver;
-        } else if (monsterDefeated || isLastChallenge) {
-            // 怪物被击败或题目答完，完成探险
-            btnSubmit.textContent = '完成探险';
-            btnSubmit.onclick = completeAdventure;
-        } else {
+        } else if (hasNextChallenge) {
             btnSubmit.textContent = '继续战斗';
             btnSubmit.onclick = () => {
-                state.currentQuestionIndex++;
+                state.currentQuestionIndex = nextIndex;
                 showBattle();
             };
+        } else {
+            btnSubmit.textContent = '完成探险';
+            btnSubmit.onclick = completeAdventure;
         }
         btnSubmit.disabled = false;
 
